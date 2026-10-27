@@ -1,11 +1,9 @@
 `timescale 1ns/1ps
 // Full chain test:  clk_div -> 3 x mic_emu -> i2s_rx
-// Every sample the receiver outputs is compared with the value stored in the
-// .mem files (top 16 of the 24 bits). Run gen_samples.py first.
 
 module tb_mic_chain;
     reg clk = 0, rst = 1;
-    always #5 clk = ~clk;                       // 100 MHz
+    always #5 clk = ~clk;                       
 
     wire bclk, ws, bclk_rise, bclk_fall, ws_edge;
     clk_div #(.HALF_PERIOD(16), .SLOT_BITS(32)) div (
@@ -22,7 +20,7 @@ module tb_mic_chain;
     i2s_rx rx (.clk(clk), .rst(rst), .bclk_rise(bclk_rise), .ws_edge(ws_edge), .ws(ws),
                .sd(sd), .mic0(m0), .mic1(m1), .mic2(m2), .valid(valid));
 
-    // expected data, read from the same files
+    // expected data, read from the mem files
     localparam N = 256;
     reg [23:0] x0 [0:N-1];
     reg [23:0] x1 [0:N-1];

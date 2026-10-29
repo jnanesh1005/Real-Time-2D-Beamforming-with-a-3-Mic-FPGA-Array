@@ -1,0 +1,1 @@
+Full-scale random: each sample is randomly −32768 or +32767. This stresses the whitener’s clipping.

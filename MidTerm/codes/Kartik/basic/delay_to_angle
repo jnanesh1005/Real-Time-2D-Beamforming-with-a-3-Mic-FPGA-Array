@@ -1,0 +1,156 @@
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+C = 343.0 # speed of sound (m/s)
+FS = 48000 # sample rate (Hz)  <-- set to your I2S rate
+PAIRS = [(0, 1), (1, 2), (2, 0)] #base 0 mic numbering 
+SUM_TOL = 1.0 
+
+#mic positioned as equilated triangle
+def mic_positions(d=0.08):
+    R = d / np.sqrt(3)
+    return R * np.array([[1, 0],[-0.5, np.sqrt(3) / 2],[-0.5, -np.sqrt(3) / 2]])
+
+#stores each of mic pair as vectors 3x2 matrix
+def design_matrix(P):
+    return np.array([P[i] - P[j] for i, j in PAIRS])
+
+#Ideal lags in SAMPLES (tau_ij = t_j - t_i) for source azimuth theta (rad)
+#Direction in , delays out
+#It takes an angle in radians and find the delay for the mics defined at position in array P
+def true_lags(theta, P):    
+    u = np.array([np.cos(theta), np.sin(theta)])
+    return design_matrix(P) @ u / C * FS
+
+#takes lags , position of mics and returns angle (in degrees) and reliable flag
+def lags_to_angle(lags, P, sum_tol=SUM_TOL):
+    lags = np.asarray(lags, float)
+    M = design_matrix(P)
+    #converts delays from samlpe to metres 
+    b = C * lags / FS  
+    '''
+    (pi - pj).u = b
+    Mu = b , 3 equations, 2 unknowns
+    we pick the u that is wrong by the smallest total amount, the least-squares solution.
+    '''
+    u = np.linalg.solve(M.T @ M, M.T @ b)              # (M^T M)^-1 M^T b
+    #vector to angle
+    theta = np.degrees(np.arctan2(u[1], u[0])) % 360
+    '''
+    ideally (t2-t1) + (t3-t2) + (t1-t3) = 0
+    but noise or echo , the sum is no longer zero
+    if more than sum_tol , its not reliable 
+    '''
+    reliable = abs(lags.sum()) <= sum_tol
+    return theta, reliable
+
+#takes integer fixed-point input (not float) - more realistic way of implementing on fpga
+def lags_to_angle_fixed(lags, P, lag_frac=4, m_frac=14):
+    # lag_frac = 4 -> lag is stored with 4 fractional bits
+    M = design_matrix(P)
+    K = np.linalg.solve(M.T @ M, M.T) * C / FS                 
+    # K @ lags (lags in samples) gives u directly
+    Kq = np.round(K * 2 ** m_frac).astype(np.int64)
+    lq = np.round(np.asarray(lags) * 2 ** lag_frac).astype(np.int64)
+    u = Kq @ lq                                                
+    theta = np.degrees(np.arctan2(int(u[1]), int(u[0]))) % 360
+    return theta, abs(int(lq.sum())) <= SUM_TOL * 2 ** lag_frac 
+ 
+#generates multi-channel microphone signals arriving from direction theta 
+def gen_mics(theta, P, N, snr_db, rng):
+    """White-noise source with exact (fractional) delays per mic + sensor noise."""
+    S = np.fft.rfft(rng.standard_normal(N))
+    f = np.fft.rfftfreq(N, 1 / FS)
+    u = np.array([np.cos(theta), np.sin(theta)])
+    #arrival times
+    t = -(P @ u) / C
+    x = np.array([np.fft.irfft(S * np.exp(-2j * np.pi * f * ti), N) for ti in t])
+    return x + rng.standard_normal(x.shape) * 10 ** (-snr_db / 20)
+ 
+#cross-correlation gcc_phat implementation in python
+def gcc_phat_lag(x_i, x_j, max_lag, interp):
+    #Lag at which mic j is later than mic i
+    N = len(x_i)
+    G = np.fft.rfft(x_j) * np.conj(np.fft.rfft(x_i))
+    cc = np.fft.irfft(G / (np.abs(G) + 1e-12), N)
+    lags = np.arange(-max_lag, max_lag + 1)
+    r = cc[lags % N]
+    k = int(np.argmax(r))
+    delta = 0.0
+    #parabolic interpolation
+    if interp and 0 < k < len(r) - 1: 
+        a, b, c = r[k - 1], r[k], r[k + 1]
+        if a - 2 * b + c != 0:
+            delta = 0.5 * (a - c) / (a - 2 * b + c)
+    return lags[k] + delta
+ 
+#Runs cross-correlation (GCC-PHAT) with the specified sub-sample interpolation method (interp) 
+#to estimate TDOA time lags between microphones.
+def estimate_lags(x, P, interp):
+    dmax = max(np.linalg.norm(P[i] - P[j]) for i, j in PAIRS)
+    L = int(np.ceil(dmax / C * FS)) + 1
+    return np.array([gcc_phat_lag(x[i], x[j], L, interp) for i, j in PAIRS])
+ 
+
+def wrap_deg(a):
+    return (a + 180) % 360 - 180
+ 
+#Returns a NumPy array containing the RMS error(in degrees)
+def rms_error(P, angles, interp, mode, snr=20, N=4096, trials=20, seed=0):
+    #for fixed noise
+    rng = np.random.default_rng(seed)
+    #chossing between float/fixed
+    decode = lags_to_angle if mode == "float" else lags_to_angle_fixed
+    out = []
+    for th in angles:
+        e = []
+        # Runs 20 trials for the current angle to average out noise variations
+        for _ in range(trials):
+            x = gen_mics(np.deg2rad(th), P, N, snr, rng)
+            #decode converts estimated lags into the estimated angle 'est'
+            est, _ = decode(estimate_lags(x, P, interp), P)
+            e.append(wrap_deg(est - th))
+        #rms error calcualation
+        out.append(np.sqrt(np.mean(np.square(e))))
+    return np.array(out)
+ 
+ 
+if __name__ == "__main__":
+
+    #stores all the mic positions 
+    P = mic_positions(0.08)
+    #array of angles in degrees in step of 5
+    angles = np.arange(0, 360, 5)
+ 
+    #sanity check: ideal lags must give back the exact angle
+    #err stores list of diff(error) in angle calculated by module(lags_to_angle) and actual angle 'a'
+    err = [wrap_deg(lags_to_angle(true_lags(np.deg2rad(a), P), P)[0] - a) for a in angles]
+
+    print("ideal lags, max error (deg):", np.max(np.abs(err)))
+ 
+    #Plot Type 1 (4 Cases): error vs true angle (float/fixed, integer/parabolic)
+    
+    for interp in (False, True):
+        for mode, ls in (("float", "-"), ("fixed", "--")):
+            e = rms_error(P, angles, interp, mode)
+            plt.figure(figsize=(9, 4.5))
+            plt.plot(angles, e, ls, label=f"{'parabolic' if interp else 'integer'} lag, {mode}")
+            print(f"{'parabolic' if interp else 'integer'} {mode}: mean RMS {e.mean():.2f} deg")
+            plt.xlabel("true azimuth (deg)"); plt.ylabel("RMS error (deg)")
+            plt.title("Error vs true angle (d = 8 cm, 20 dB SNR)")
+            plt.grid(alpha=.3); plt.legend(); plt.tight_layout()
+            plt.savefig(f"err_vs_angle_{'parabolic' if interp else 'integer'}_lag_{mode}.png", dpi=130)
+ 
+    #Plot Type 2: error vs mic spacing
+    sides = np.array([0.02, 0.04, 0.06, 0.08, 0.10, 0.15, 0.20])
+    sweep = np.arange(0, 360, 5)
+    plt.figure(figsize=(7, 4.5))
+    for interp in (False, True):
+        m = [rms_error(mic_positions(d), sweep, interp, "float", trials=10).mean() for d in sides]
+        plt.plot(sides * 100, m, "o-", label="parabolic" if interp else "integer")
+    plt.xlabel("side length d (cm)"); plt.ylabel("mean RMS error (deg)")
+    plt.title("Error vs mic spacing (20 dB SNR)")
+    plt.grid(alpha=.3); plt.legend(); plt.tight_layout()
+    plt.savefig("err_vs_spacing.png", dpi=130)

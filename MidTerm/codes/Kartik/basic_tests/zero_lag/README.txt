@@ -1,0 +1,1 @@
+Zero lag: all three channels identical.

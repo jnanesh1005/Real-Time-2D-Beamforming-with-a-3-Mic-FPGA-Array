@@ -1,0 +1,5 @@
+frequency_hz,wavelength_m,spacing_8cm_over_wavelength,target_response_db,interferer_90deg_response_db,interferer_attenuation_db,approx_3db_beamwidth_deg,first_null_left_deg,first_null_right_deg,deepest_null_angle_deg,deepest_null_db,strongest_sidelobe_angle_deg,strongest_sidelobe_db
+500,0.686,0.11661807580174927,0.0,-0.6012475841618208,0.6012475841618208,nan,nan,nan,nan,nan,nan,nan
+1000,0.343,0.23323615160349853,0.0,-2.5342975378370856,2.5342975378370856,202.7885445469942,nan,nan,nan,nan,nan,nan
+2000,0.1715,0.46647230320699706,0.0,-9.83115323771491,9.83115323771491,114.3889812157797,nan,nan,nan,nan,nan,nan
+4000,0.08575,0.9329446064139941,0.0,-0.3960318000974482,0.3960318000974482,62.682604311645434,nan,141.75,141.75,-43.64140223123515,nan,nan

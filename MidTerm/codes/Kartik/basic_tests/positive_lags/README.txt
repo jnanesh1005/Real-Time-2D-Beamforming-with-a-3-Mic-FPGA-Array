@@ -1,0 +1,1 @@
+Positive lag: Baseline test with known delays of +3 and +5 samples across the three channels. Checks whether the correlator correctly identifies positive delays.

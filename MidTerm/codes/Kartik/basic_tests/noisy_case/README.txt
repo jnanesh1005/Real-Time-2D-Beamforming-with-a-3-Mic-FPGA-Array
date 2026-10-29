@@ -1,0 +1,1 @@
+Noisy case: a delayed copy plus some random noise, so the answer isn’t perfect by construction.

@@ -1,0 +1,1 @@
+Several windows: 3 × 1024 samples with the same delays in every window. Random data in every window

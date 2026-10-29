@@ -1,0 +1,1 @@
+Full-scale constant: every sample is −32768, on all channels. This is the worst case for the 42-bit accumulator.

@@ -1,0 +1,1 @@
+Negative lag: make ch1 the later channel, so ch1→ch2 is −3. This tests the half of the correlator the current data never exercises.

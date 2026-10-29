@@ -1,0 +1,1 @@
+All zeros: every sample 0. Every score ties, so the “lowest lag wins” rule decides the answer.

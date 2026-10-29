@@ -1,0 +1,39 @@
+{
+    "source_angle_deg": 270,
+    "angle_convention": "counter-clockwise from +x axis, measured at array centroid",
+    "rt60_s": 0.25,
+    "snr_db": 0,
+    "window_start_sample": 215552,
+    "fs_hz": 16000,
+    "speed_of_sound_m_s": 343.0,
+    "ism_max_order": 30,
+    "source_position_m": [
+        2.9999999999999996,
+        1.0,
+        1.5
+    ],
+    "mic_positions_m": [
+        [
+            2.9633333333333334,
+            2.486666666666667,
+            1.5
+        ],
+        [
+            3.0433333333333334,
+            2.486666666666667,
+            1.5
+        ],
+        [
+            2.993333333333333,
+            2.526666666666667,
+            1.5
+        ]
+    ],
+    "true_lags_samples_fractional": {
+        "ch1_ch2": 0.008364168237541098,
+        "ch1_ch3": 1.8454790576991296,
+        "ch2_ch3": 1.8371148894615885
+    },
+    "lag_sign": "positive = second channel arrives later",
+    "ground_truth_type": "rounded direct-path geometry"
+}
